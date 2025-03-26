@@ -184,8 +184,11 @@
         (merge proposal { votes-against: (+ (get votes-against proposal) vote-amount) }))
     )
     
-    ;; Lock the voting tokens
-    (ft-transfer? preservia-token vote-amount tx-sender (as-contract tx-sender))
+    ;; Lock the voting tokens and return the result
+    (unwrap! (ft-transfer? preservia-token vote-amount tx-sender (as-contract tx-sender))
+             err-insufficient-funds)
+    
+    (ok true)
   ))
 
 ;; Finalize a proposal after its deadline
@@ -251,7 +254,8 @@
     (asserts! (>= (ft-get-balance preservia-token tx-sender) amount) err-insufficient-funds)
     
     ;; Transfer tokens to the contract
-    (ft-transfer? preservia-token amount tx-sender (as-contract tx-sender))
+    (unwrap! (ft-transfer? preservia-token amount tx-sender (as-contract tx-sender))
+             err-insufficient-funds)
     
     ;; Update the asset's current funding
     (map-set heritage-assets { asset-id: asset-id }
