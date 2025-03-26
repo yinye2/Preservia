@@ -82,6 +82,13 @@
 (define-private (validate-uint-input (input uint))
   (> input u0))
 
+;; Helper function to validate optional string input
+(define-private (validate-optional-string-input (input (optional (string-ascii 256))))
+  (match input
+    url (< (len url) u256)
+    true
+  ))
+
 ;; Admin functions
 
 ;; Add a new heritage asset to the registry
@@ -99,7 +106,8 @@
         (validated-location (validate-string-input location))
         (validated-status (validate-string-input preservation-status))
         (validated-funding (validate-uint-input total-funding-needed))
-        (validated-date (validate-uint-input creation-date)))
+        (validated-date (validate-uint-input creation-date))
+        (validated-metadata (validate-optional-string-input metadata-url)))
     
     ;; Validate inputs
     (asserts! validated-name err-invalid-input)
@@ -107,6 +115,7 @@
     (asserts! validated-status err-invalid-input)
     (asserts! validated-funding err-invalid-input)
     (asserts! validated-date err-invalid-input)
+    (asserts! validated-metadata err-invalid-input)
     (asserts! (> (len description) u0) err-invalid-input)
     (asserts! (> (len cultural-significance) u0) err-invalid-input)
     
@@ -151,11 +160,13 @@
   (let ((proposal-id (var-get next-proposal-id))
         (validated-title (validate-string-input title))
         (validated-funding (validate-uint-input funding-amount))
+        (validated-asset-id (validate-uint-input asset-id))
         (validated-deadline (> deadline block-height)))
     
     ;; Validate inputs
     (asserts! validated-title err-invalid-input)
     (asserts! validated-funding err-invalid-input)
+    (asserts! validated-asset-id err-invalid-input)
     (asserts! validated-deadline err-proposal-closed)
     (asserts! (> (len description) u0) err-invalid-input)
     (asserts! (> (len preservation-plan) u0) err-invalid-input)
