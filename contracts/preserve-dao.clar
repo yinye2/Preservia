@@ -12,6 +12,7 @@
 (define-constant err-already-voted (err u106))
 (define-constant err-proposal-active (err u107))
 (define-constant err-proposal-not-passed (err u108))
+(define-constant err-invalid-input (err u109))
 
 ;; Data structures for heritage sites and artifacts
 (define-map heritage-assets
@@ -73,6 +74,14 @@
 ;; Initialize the contract with tokens to the contract owner
 (ft-mint? preservia-token (var-get token-supply) contract-owner)
 
+;; Helper function to validate string inputs
+(define-private (validate-string-input (input (string-ascii 100)))
+  (and (not (is-eq input "")) (< (len input) u100)))
+
+;; Helper function to validate uint inputs
+(define-private (validate-uint-input (input uint))
+  (> input u0))
+
 ;; Admin functions
 
 ;; Add a new heritage asset to the registry
@@ -85,7 +94,23 @@
                   (total-funding-needed uint)
                   (preservation-status (string-ascii 20))
                   (metadata-url (optional (string-ascii 256))))
-  (let ((asset-id (var-get next-asset-id)))
+  (let ((asset-id (var-get next-asset-id))
+        (validated-name (validate-string-input name))
+        (validated-location (validate-string-input location))
+        (validated-status (validate-string-input preservation-status))
+        (validated-funding (validate-uint-input total-funding-needed))
+        (validated-date (validate-uint-input creation-date)))
+    
+    ;; Validate inputs
+    (asserts! validated-name err-invalid-input)
+    (asserts! validated-location err-invalid-input)
+    (asserts! validated-status err-invalid-input)
+    (asserts! validated-funding err-invalid-input)
+    (asserts! validated-date err-invalid-input)
+    (asserts! (> (len description) u0) err-invalid-input)
+    (asserts! (> (len cultural-significance) u0) err-invalid-input)
+    
+    ;; Check authorization
     (asserts! (or (is-eq tx-sender contract-owner)
                 (>= (ft-get-balance preservia-token tx-sender) u1000))
             err-unauthorized)
@@ -123,15 +148,23 @@
                   (funding-amount uint)
                   (preservation-plan (string-utf8 1000))
                   (deadline uint))
-  (let ((proposal-id (var-get next-proposal-id)))
+  (let ((proposal-id (var-get next-proposal-id))
+        (validated-title (validate-string-input title))
+        (validated-funding (validate-uint-input funding-amount))
+        (validated-deadline (> deadline block-height)))
+    
+    ;; Validate inputs
+    (asserts! validated-title err-invalid-input)
+    (asserts! validated-funding err-invalid-input)
+    (asserts! validated-deadline err-proposal-closed)
+    (asserts! (> (len description) u0) err-invalid-input)
+    (asserts! (> (len preservation-plan) u0) err-invalid-input)
+    
     ;; Ensure asset exists
     (asserts! (is-some (map-get? heritage-assets { asset-id: asset-id })) err-not-found)
     
     ;; Require minimum token stake to create a proposal
     (asserts! (>= (ft-get-balance preservia-token tx-sender) u500) err-unauthorized)
-    
-    ;; Ensure deadline is in the future
-    (asserts! (> deadline block-height) err-proposal-closed)
     
     (map-insert proposals
       { proposal-id: proposal-id }
@@ -160,6 +193,10 @@
     (proposal (unwrap! (map-get? proposals { proposal-id: proposal-id }) err-not-found))
     (voter-balance (ft-get-balance preservia-token tx-sender))
   )
+    ;; Validate inputs
+    (asserts! (validate-uint-input proposal-id) err-invalid-input)
+    (asserts! (validate-uint-input vote-amount) err-invalid-input)
+    
     ;; Check if the proposal is still active
     (asserts! (is-eq (get status proposal) "active") err-proposal-closed)
     (asserts! (< block-height (get deadline proposal)) err-proposal-closed)
@@ -196,6 +233,9 @@
   (let (
     (proposal (unwrap! (map-get? proposals { proposal-id: proposal-id }) err-not-found))
   )
+    ;; Validate inputs
+    (asserts! (validate-uint-input proposal-id) err-invalid-input)
+    
     ;; Ensure the proposal deadline has passed and it's still active
     (asserts! (>= block-height (get deadline proposal)) err-proposal-active)
     (asserts! (is-eq (get status proposal) "active") err-proposal-closed)
@@ -220,6 +260,9 @@
     (proposal (unwrap! (map-get? proposals { proposal-id: proposal-id }) err-not-found))
     (asset (unwrap! (map-get? heritage-assets { asset-id: (get asset-id proposal) }) err-not-found))
   )
+    ;; Validate inputs
+    (asserts! (validate-uint-input proposal-id) err-invalid-input)
+    
     ;; Ensure the proposal has passed
     (asserts! (is-eq (get status proposal) "passed") err-proposal-not-passed)
     
@@ -250,6 +293,10 @@
     (donor-shares (default-to { shares: u0 } 
                     (map-get? asset-ownership { asset-id: asset-id, owner: tx-sender })))
   )
+    ;; Validate inputs
+    (asserts! (validate-uint-input asset-id) err-invalid-input)
+    (asserts! (validate-uint-input amount) err-invalid-input)
+    
     ;; Check if the user has enough tokens
     (asserts! (>= (ft-get-balance preservia-token tx-sender) amount) err-insufficient-funds)
     
